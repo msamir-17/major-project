@@ -1,0 +1,27 @@
+# Virtual environment
+venv/
+.venv/
+
+# Compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*~
+
+# Local environment variables and credentials
+.env
+
+# IDE/editor folders
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Alembic cache (optional)
+migrations/__pycache__/
