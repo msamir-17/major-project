@@ -230,10 +230,10 @@ export default function FindMentorsPage() {
                     </div>
                     <div>
                       <CardTitle className="text-lg">
-                        {mentor.mentor_name}
+                        {mentor.full_name}
                       </CardTitle>
                       <p className="text-sm text-gray-600">
-                        {mentor.mentor_job_title}
+                        {mentor.job_title}
                       </p>
                       {mentor.mentor_company && (
                         <p className="text-xs text-gray-500">
@@ -378,7 +378,7 @@ export default function FindMentorsPage() {
                 {/* Action Buttons */}
                 <div className="flex space-x-2 pt-4">
                   <Button
-                    onClick={() => router.push(`/chat/${mentor.mentor_id}`)}
+                    onClick={() => router.push(`/chat/${mentor.id}`)}
                     className="flex-1"
                     size="sm"
                   >
@@ -386,10 +386,15 @@ export default function FindMentorsPage() {
                   </Button>
                   <Button
                     onClick={() => {
-                      setSelectedMentor({
-                        id: mentor.mentor_id,
-                        name: mentor.mentor_name,
-                      });
+                      // setSelectedMentor({
+                      //   id: mentor.mentor_id,
+                      //   name: mentor.mentor_name,
+                      // });
+
+
+                      setSelectedMentor({ id: mentor_id, name:mentor.full_name});
+
+
                       setIsBookingOpen(true);
                     }}
                     className="flex-1"

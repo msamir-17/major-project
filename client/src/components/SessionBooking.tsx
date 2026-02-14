@@ -46,7 +46,7 @@ const SessionBooking: React.FC<SessionBookingProps> = ({
     const token = localStorage.getItem("auth_token");
 
     try {
-      const response = await fetch("/api/sessions/book", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sessions/book`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

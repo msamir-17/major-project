@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react"; 
 import { motion } from "framer-motion";
 import Logo from "@/components/Logo";
 import PageWrapper from "@/components/PageWrapper";
@@ -28,6 +28,26 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 const UserDashboard: React.FC = () => {
+  const [sessions, setSessions] = useState([]);
+  // To hold the sessions
+
+  useEffect(() => {
+    const fetchSessions = async () => {
+      const token = localStorage.getItem("auth_token");
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/sessions/me`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data);
+      }
+    };
+    fetchSessions();
+  }, []);
+
   const router = useRouter();
   const { logout } = useAuth();
   // Mock data for mentors
@@ -86,21 +106,6 @@ const UserDashboard: React.FC = () => {
     { action: "Profile updated", time: "1 week ago", type: "user" },
   ];
 
-  const upcomingSessions = [
-    {
-      mentor: "Sarah Johnson",
-      topic: "React Best Practices",
-      date: "Tomorrow",
-      time: "2:00 PM",
-    },
-    {
-      mentor: "Michael Chen",
-      topic: "Product Roadmap Planning",
-      date: "Friday",
-      time: "10:00 AM",
-    },
-  ];
-
   return (
     <PageWrapper>
       {/* Header */}
@@ -144,17 +149,26 @@ const UserDashboard: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
         >
-          <Button onClick={() => router.push("/agent")} className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl border bg-white text-black shadow-sm hover:bg-gray-50 hover:shadow-md transition-all duration-200 ease-in-out">
+          <Button
+            onClick={() => router.push("/agent")}
+            className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl border bg-white text-black shadow-sm hover:bg-gray-50 hover:shadow-md transition-all duration-200 ease-in-out"
+          >
             <Search className="h-5 w-5" />
             <span className="text-sm hover:text-black">Agent</span>
           </Button>
 
-          <Button onClick={() => router.push("/user/recommendations")} className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl border bg-white text-black shadow-sm hover:bg-gray-50 hover:shadow-md transition-all duration-200 ease-in-out">
+          <Button
+            onClick={() => router.push("/user/recommendations")}
+            className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl border bg-white text-black shadow-sm hover:bg-gray-50 hover:shadow-md transition-all duration-200 ease-in-out"
+          >
             <Search className="h-5 w-5" />
             <span className="text-sm ">Find Mentors</span>
           </Button>
 
-          <Button onClick={() => router.push('/chat/2')} className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl border bg-white text-black shadow-sm hover:bg-gray-50 hover:shadow-md transition-all duration-200 ease-in-out">
+          <Button
+            onClick={() => router.push("/chat/2")}
+            className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl border bg-white text-black shadow-sm hover:bg-gray-50 hover:shadow-md transition-all duration-200 ease-in-out"
+          >
             <MessageCircle className="h-5 w-5" />
             <span className="text-sm">Messages</span>
           </Button>
@@ -297,40 +311,34 @@ const UserDashboard: React.FC = () => {
               transition={{ duration: 0.6, delay: 0.4 }}
             >
               <Card className="shadow-medium">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-primary" />
-                    Upcoming Sessions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {upcomingSessions.map((session, index) => (
+                {sessions.length > 0 ? (
+                  sessions.map((session: any, index: number) => (
                     <motion.div
-                      key={index}
-                      className="p-3 rounded-lg bg-muted/30 border border-border"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3, delay: 0.1 * index }}
+                      key={index} /* ... (rest of the code is the same) ... */
                     >
-                      <h4 className="font-medium text-sm">{session.topic}</h4>
+                      <h4 className="font-medium text-sm">{`Session with Mentor ID: ${session.mentor_id}`}</h4>
                       <p className="text-xs text-muted-foreground">
-                        with {session.mentor}
+                        Status: {session.status}
                       </p>
                       <div className="flex justify-between items-center mt-2">
                         <span className="text-xs text-primary">
-                          {session.date}
+                          {new Date(
+                            session.scheduled_time,
+                          ).toLocaleDateString()}
                         </span>
                         <span className="text-xs font-medium">
-                          {session.time}
+                          {new Date(
+                            session.scheduled_time,
+                          ).toLocaleTimeString()}
                         </span>
                       </div>
                     </motion.div>
-                  ))}
-
-                  <Button variant="outline" size="sm" className="w-full">
-                    View All Sessions
-                  </Button>
-                </CardContent>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No upcoming sessions.
+                  </p>
+                )}
               </Card>
             </motion.div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Logo from '@/components/Logo';
 import { GradientButton } from '@/components/ui/gradient-button';
@@ -11,6 +11,22 @@ import { Calendar, MessageCircle, Users, TrendingUp, User, LogOut, Star, Clock, 
 import { useAuth } from '@/context/AuthContext';
 
 const MentorDashboard: React.FC = () => {
+  const [sessions, setSessions] = useState([]); // To hold the sessions
+
+  
+    useEffect(() => {
+      const fetchSessions = async () => {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sessions/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSessions(data);
+        }
+      };
+      fetchSessions();
+    }, []);
   const { logout } = useAuth();
   // Mock data for mentees and activity
   const recentMentees = [
@@ -40,26 +56,26 @@ const MentorDashboard: React.FC = () => {
     }
   ];
 
-  const upcomingSessions = [
-    {
-      mentee: "Alex Thompson",
-      topic: "Advanced React Patterns",
-      date: "Today",
-      time: "3:00 PM"
-    },
-    {
-      mentee: "Maria Garcia", 
-      topic: "Design System Review",
-      date: "Tomorrow",
-      time: "11:00 AM"
-    },
-    {
-      mentee: "James Wilson",
-      topic: "ML Model Optimization",
-      date: "Friday",
-      time: "2:00 PM"
-    }
-  ];
+  // const upcomingSessions = [
+  //   {
+  //     mentee: "Alex Thompson",
+  //     topic: "Advanced React Patterns",
+  //     date: "Today",
+  //     time: "3:00 PM"
+  //   },
+  //   {
+  //     mentee: "Maria Garcia", 
+  //     topic: "Design System Review",
+  //     date: "Tomorrow",
+  //     time: "11:00 AM"
+  //   },
+  //   {
+  //     mentee: "James Wilson",
+  //     topic: "ML Model Optimization",
+  //     date: "Friday",
+  //     time: "2:00 PM"
+  //   }
+  // ];
 
   const stats = [
     { title: "Total Mentees", value: "24", icon: Users, color: "text-primary" },
@@ -366,42 +382,26 @@ const MentorDashboard: React.FC = () => {
               aria-labelledby="upcoming-sessions-heading"
             >
               <Card className="border-0 bg-gradient-to-br from-background to-muted/20 shadow-xl rounded-2xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-accent/10 via-primary/5 to-accent/10 border-b border-border/30 pb-6">
-                  <CardTitle className="flex items-center gap-3" id="upcoming-sessions-heading">
-                    <div className="p-2 rounded-xl bg-accent/10 border border-accent/20">
-                      <Clock className="h-4 w-4 text-accent" aria-hidden="true" />
-                    </div>
-                    Upcoming Sessions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  {upcomingSessions.map((session, index) => (
-                    <motion.article
-                      key={index}
-                      className="p-4 rounded-2xl bg-gradient-to-r from-background to-muted/30 hover:from-accent/5 hover:to-primary/5 transition-all duration-300 border border-border/30"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3, delay: 0.1 * index }}
-                    >
-                      <h4 className="font-semibold text-sm text-foreground mb-1">{session.topic}</h4>
-                      <p className="text-xs text-muted-foreground mb-3">with {session.mentee}</p>
-                      <div className="flex justify-between items-center">
-                        <time className="text-xs text-primary font-semibold bg-primary/10 px-2 py-1 rounded-lg">{session.date}</time>
-                        <time className="text-xs font-bold text-foreground bg-accent/10 px-2 py-1 rounded-lg">{session.time}</time>
-                      </div>
-                    </motion.article>
-                  ))}
-                  
-                  <GradientButton 
-                    variant="primary" 
-                    size="sm" 
-                    className="w-full mt-6 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground border-0 shadow-lg hover:shadow-xl transition-all duration-300 focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                    aria-label="Manage schedule"
-                  >
-                    <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
-                    Manage Schedule
-                  </GradientButton>
-                </CardContent>
+                 {sessions.length > 0 ? (
+          sessions.map((session: any, index: number) => (
+            <motion.div key={index} /* ... (rest of the code is the same) ... */ >
+              <h4 className="font-medium text-sm">{`Session with Mentor ID: ${session.mentor_id}`}</h4>
+              <p className="text-xs text-muted-foreground">
+                Status: {session.status}
+              </p>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-xs text-primary">
+                  {new Date(session.scheduled_time).toLocaleDateString()}
+                </span>
+                <span className="text-xs font-medium">
+                  {new Date(session.scheduled_time).toLocaleTimeString()}
+                </span>
+              </div>
+            </motion.div>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">No upcoming sessions.</p>
+        )}
               </Card>
             </motion.section>
 
