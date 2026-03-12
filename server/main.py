@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from api.scheduling import router as scheduling_router
+from api.community import router as community_router
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -16,8 +17,11 @@ from fastapi.middleware.cors import CORSMiddleware
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 warnings.filterwarnings("ignore", message=".*_api_client.*")
 
-# Load environment variables from app folder
-load_dotenv(Path("app/.env"))
+# Load environment variables from app folder (robust to working directory)
+ENV_PATH = Path(__file__).resolve().parent / "app" / ".env"
+load_dotenv(ENV_PATH, override=True)
+print(f"Loaded .env: {ENV_PATH} (exists={ENV_PATH.exists()})")
+print(f"GEMINI_API_KEY configured: {bool(os.getenv('GEMINI_API_KEY'))}")
 
 # Redirect stderr to suppress the AttributeError messages completely
 class SuppressStderr:
@@ -189,6 +193,7 @@ if STATIC_DIR.exists():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -199,10 +204,12 @@ app.add_middleware(
 # -----------------------
 # Include users router (existing)
 from api.messaging import router as messaging_router
+from api.translation import router as translation_router
 app.include_router(messaging_router, prefix="/api", tags=["Messaging"])
-app.include_router(users_router, prefix="/api/users", tags=["Users"])
+app.include_router(translation_router, prefix="/api", tags=["Translation"])
 app.include_router(users_router, prefix="/api/users", tags=["Users"])
 app.include_router(scheduling_router, prefix="/api", tags=["Scheduling"])
+app.include_router(community_router, prefix="/api", tags=["Community"])
 # Include recommendations router (if available)
 if RECOMMENDATIONS_AVAILABLE:
     app.include_router(recommendations_router, prefix="/api/recommendations", tags=["Recommendations"])
@@ -349,6 +356,26 @@ async def health_check():
         "database": "connected"
     }
 
+
+def _sse_single_message(payload: dict):
+    async def _gen():
+        yield f"data: {json.dumps(payload)}\n\n"
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+def _friendly_adk_error(err: Exception) -> str:
+    msg = str(err)
+    low = msg.lower()
+    if "resource_exhausted" in msg or "quota" in low or "rate" in low:
+        return "❌ Gemini quota/limit exceeded. Please switch to a new Gemini API key and restart the backend."
+    if "permission_denied" in msg or "unauthorized" in low or "api key" in low or "permission" in low:
+        return "❌ Gemini API key invalid or missing permissions. Please update GEMINI_API_KEY and restart the backend."
+    return f"❌ Failed to start agent session: {msg}"
+
 # Only add Google ADK routes if available
 if GOOGLE_ADK_AVAILABLE:
     @app.get("/events/{user_id}")
@@ -358,7 +385,13 @@ if GOOGLE_ADK_AVAILABLE:
         # Retrieve the runner from the application state
         runner = getattr(request.app.state, 'runner', None)
         if not runner:
-            return {"error": "ADK Runner not available"}
+            return _sse_single_message(
+                {
+                    "mime_type": "text/plain",
+                    "data": "❌ ADK runner not available on server. Please check server startup logs.",
+                    "turn_complete": True,
+                }
+            )
         
         user_id_str = str(user_id)
         try:
@@ -367,7 +400,13 @@ if GOOGLE_ADK_AVAILABLE:
                 live_events, live_request_queue = await start_agent_session(runner, user_id_str, is_audio == "true") 
             active_sessions[user_id_str] = live_request_queue
         except Exception as e:
-            return {"error": f"Failed to start session: {str(e)}"}
+            return _sse_single_message(
+                {
+                    "mime_type": "text/plain",
+                    "data": _friendly_adk_error(e),
+                    "turn_complete": True,
+                }
+            )
 
         def cleanup():
             with SuppressStderr():
@@ -421,9 +460,18 @@ else:
     @app.get("/events/{user_id}")
     async def sse_endpoint_fallback(user_id: int):
         """Fallback SSE endpoint when Google ADK is not available"""
-        return {"error": "Google ADK features are not available. Please configure API credentials."}
+        return _sse_single_message(
+            {
+                "mime_type": "text/plain",
+                "data": "❌ Google ADK features are not available on server. Configure API credentials and restart the backend.",
+                "turn_complete": True,
+            }
+        )
 
     @app.post("/send/{user_id}")
     async def send_message_endpoint_fallback(user_id: int):
         """Fallback send message endpoint when Google ADK is not available"""
         return {"error": "Google ADK features are not available. Please configure API credentials."}
+
+
+

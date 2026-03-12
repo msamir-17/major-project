@@ -1,8 +1,12 @@
 from sqlmodel import SQLModel, create_engine, Session
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 
 # Load environment variables
+# Prefer server/app/.env (used by main.py) but keep fallback behavior.
+ENV_PATH = Path(__file__).resolve().parent / "app" / ".env"
+load_dotenv(ENV_PATH, override=True)
 load_dotenv()
 
 # Get DATABASE_URL from .env

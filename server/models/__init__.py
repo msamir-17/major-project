@@ -85,7 +85,39 @@ class Session(SQLModel, table=True):
 
     status:str = Field(default="pending")
 
+    meeting_link: Optional[str] = Field(default=None)
+    notes: Optional[str] = Field(default=None)
+    is_completed: bool = Field(default=False)
+
     created_at:datetime = Field(default_factory=datetime.utcnow)
+
+
+class CommunityPost(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str
+    content: str
+    tags: Optional[str] = Field(default="")
+    author_id: int = Field(foreign_key="userprofile.id", index=True)
+    likes_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Comment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    post_id: int = Field(foreign_key="communitypost.id", index=True)
+    user_id: int = Field(foreign_key="userprofile.id", index=True)
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PostLike(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    post_id: int = Field(foreign_key="communitypost.id", index=True)
+    user_id: int = Field(foreign_key="userprofile.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 __all__.append("Message")
 __all__.append("Session")  
+__all__.append("CommunityPost")
+__all__.append("Comment")
+__all__.append("PostLike")

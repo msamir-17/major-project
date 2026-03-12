@@ -4,7 +4,7 @@ Handles user registration, authentication, profile management, and mentor operat
 """
 from __future__ import annotations
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Response
 from sqlmodel import Session, select
 from database import engine
 from models import UserProfile, MentorProfile
@@ -22,6 +22,16 @@ def get_session():
     """Database session dependency"""
     with Session(engine) as session:
         yield session
+
+
+@router.options("/login")
+async def options_login():
+    return Response(status_code=204)
+
+
+@router.options("/register")
+async def options_register():
+    return Response(status_code=204)
 
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -116,6 +126,19 @@ async def login_user(login_data: dict, session: Session = Depends(get_session)):
     Authenticate user and return access token
     """
     try:
+        requested_role = login_data.get("role")
+        if requested_role is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Role is required. Must be 'mentor' or 'learner'.",
+            )
+        requested_role = str(requested_role).lower().strip()
+        if requested_role not in {"mentor", "learner"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid role. Must be 'mentor' or 'learner'.",
+            )
+
         # Find user by email
         db_user = session.exec(
             select(UserProfile).where(UserProfile.email == login_data.get("email"))
@@ -133,6 +156,13 @@ async def login_user(login_data: dict, session: Session = Depends(get_session)):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
+
+        actual_role = "mentor" if db_user.is_mentor else "learner"
+        if requested_role != actual_role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role mismatch. This account is a {actual_role}.",
+            )
         
         # Create access token
         access_token = create_access_token(
@@ -148,7 +178,8 @@ async def login_user(login_data: dict, session: Session = Depends(get_session)):
                 "id": db_user.id,
                 "email": db_user.email,
                 "full_name": db_user.full_name,
-                "is_mentor": db_user.is_mentor
+                "is_mentor": db_user.is_mentor,
+                "role": actual_role,
             }
         }
         
@@ -236,6 +267,35 @@ async def get_all_mentors(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch mentors: {str(e)}"
+        )
+
+
+@router.get("/{user_id}", response_model=dict)
+async def get_user_by_id(
+    user_id: int,
+    current_user: UserProfile = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Get a user's basic public profile by id (authenticated)."""
+    try:
+        user = session.get(UserProfile, user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_mentor": user.is_mentor,
+            "role": "mentor" if user.is_mentor else "learner",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get user by id error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user",
         )
 
 
