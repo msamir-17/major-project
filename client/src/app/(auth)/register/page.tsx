@@ -4,7 +4,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import Logo from "@/components/Logo";
 import PageWrapper from "@/components/PageWrapper";
-import { ArrowLeft, Loader2, User, Briefcase } from "lucide-react";
+import { ArrowLeft, Loader2, Briefcase, ChevronDown, ChevronUp, GraduationCap } from "lucide-react";
 import { RegisterData } from "@/types";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -149,6 +149,8 @@ const Register: React.FC = () => {
     },
   });
 
+  const [showExtraFields, setShowExtraFields] = React.useState(false);
+
   return (
     <PageWrapper>
       <div className="min-h-screen flex bg-gradient-to-br from-slate-50 to-blue-50">
@@ -175,28 +177,50 @@ const Register: React.FC = () => {
             </div>
 
             {/* Role Selection Cards */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              <Button
-                className={`cursor-pointer transition-all duration-300 ${
-                  !formData.is_mentor
-                    ? "ring-2 ring-primary shadow-lg scale-105"
-                    : "hover:shadow-md hover:scale-102"
-                }`}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
+              <button
+                type="button"
                 onClick={() => setFieldValue("is_mentor", false)}
-              >
-                Learner
-              </Button>
-
-              <Button
-                className={`cursor-pointer transition-all duration-300 ${
-                  formData.is_mentor
-                    ? "ring-2 ring-accent shadow-lg scale-105"
-                    : "hover:shadow-md hover:scale-102"
+                className={`text-left w-full rounded-2xl border p-5 transition-all ${
+                  !formData.is_mentor
+                    ? "border-primary ring-2 ring-primary/20 bg-primary/5 shadow-sm"
+                    : "hover:bg-muted"
                 }`}
-                onClick={() => setFieldValue("is_mentor", true)}
               >
-                Mentor
-              </Button>
+                <div className="flex items-start gap-3">
+                  <div className="h-11 w-11 rounded-xl border bg-background flex items-center justify-center">
+                    <GraduationCap className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-base font-semibold text-foreground">Learner</p>
+                    <p className="text-sm text-muted-foreground">
+                      Learn, explore mentors, book sessions, and join the community.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFieldValue("is_mentor", true)}
+                className={`text-left w-full rounded-2xl border p-5 transition-all ${
+                  formData.is_mentor
+                    ? "border-primary ring-2 ring-primary/20 bg-primary/5 shadow-sm"
+                    : "hover:bg-muted"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="h-11 w-11 rounded-xl border bg-background flex items-center justify-center">
+                    <Briefcase className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-base font-semibold text-foreground">Mentor</p>
+                    <p className="text-sm text-muted-foreground">
+                      Share your skills, accept session requests, and help learners grow.
+                    </p>
+                  </div>
+                </div>
+              </button>
             </div>
 
             {/* Registration Form */}
@@ -276,48 +300,73 @@ const Register: React.FC = () => {
                         )}
                       </div>
 
-                      <div>
-                        <Label htmlFor="phone_number">Phone Number</Label>
-                        <Input
-                          id="phone_number"
-                          name="phone_number"
-                          type="tel"
-                          value={formData.phone_number || ""}
-                          onChange={handleChange}
-                          placeholder="+1 (555) 123-4567"
-                          className="mt-1"
-                        />
-                      </div>
+                      {showExtraFields ? (
+                        <>
+                          <div>
+                            <Label htmlFor="phone_number">Phone Number</Label>
+                            <Input
+                              id="phone_number"
+                              name="phone_number"
+                              type="tel"
+                              value={formData.phone_number || ""}
+                              onChange={handleChange}
+                              placeholder="+1 (555) 123-4567"
+                              className="mt-1"
+                            />
+                          </div>
 
-                      <div>
-                        <Label htmlFor="location">Location</Label>
-                        <Input
-                          id="location"
-                          name="location"
-                          value={formData.location || ""}
-                          onChange={handleChange}
-                          placeholder="City, Country"
-                          className="mt-1"
-                        />
-                      </div>
+                          <div>
+                            <Label htmlFor="location">Location</Label>
+                            <Input
+                              id="location"
+                              name="location"
+                              value={formData.location || ""}
+                              onChange={handleChange}
+                              placeholder="City, Country"
+                              className="mt-1"
+                            />
+                          </div>
 
-                      <div className="md:col-span-2">
-                        <Label htmlFor="bio">Bio</Label>
-                        <Textarea
-                          id="bio"
-                          name="bio"
-                          value={formData.bio || ""}
-                          onChange={handleChange}
-                          placeholder="Tell us about yourself..."
-                          rows={3}
-                          className="mt-1"
-                        />
-                      </div>
+                          <div className="md:col-span-2">
+                            <Label htmlFor="bio">Bio</Label>
+                            <Textarea
+                              id="bio"
+                              name="bio"
+                              value={formData.bio || ""}
+                              onChange={handleChange}
+                              placeholder="Tell us about yourself..."
+                              rows={3}
+                              className="mt-1"
+                            />
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+
+                    <div className="pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full rounded-xl"
+                        onClick={() => setShowExtraFields((v) => !v)}
+                      >
+                        {showExtraFields ? (
+                          <>
+                            <ChevronUp className="h-4 w-4 mr-2" />
+                            Show less
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4 mr-2" />
+                            Show more (optional)
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </motion.div>
 
                   {/* Learner-specific fields */}
-                  {!formData.is_mentor && (
+                  {showExtraFields && !formData.is_mentor && (
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}

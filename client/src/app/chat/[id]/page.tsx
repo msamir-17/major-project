@@ -1,29 +1,56 @@
+"use client";
 
-    "use client";
+import React, { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import ChatInterface from '@/components/ChatInterface';
+import PageWrapper from '@/components/PageWrapper';
+import UserDashboardButton from '@/components/UserDashboardButton';
 
-    import React from 'react';
-    import { useParams } from 'next/navigation';
-    import ChatInterface from '@/components/ChatInterface';
-    import PageWrapper from '@/components/PageWrapper';
+const ChatPage = () => {
+  const params = useParams();
+  const recipientId = Number(params.id);
+  const [recipientName, setRecipientName] = useState<string>(`User #${recipientId}`);
 
-    const ChatPage = () => {
-      const params = useParams();
-      const recipientId = Number(params.id); // Get the ID from the URL
+  const API_URL = useMemo(
+    () => process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
+    []
+  );
 
-      // For now, we'll just use a placeholder name.
-      // Later, we can fetch the user's real name.
-      const recipientName = `User #${recipientId}`;
+  useEffect(() => {
+    const loadRecipient = async () => {
+      if (!Number.isFinite(recipientId)) return;
+      try {
+        const token = localStorage.getItem("auth_token");
+        const res = await fetch(`${API_URL}/api/users/${recipientId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      return (
-        <PageWrapper>
-          <div className="container mx-auto max-w-2xl py-8">
-            <ChatInterface
-              recipientId={recipientId}
-              recipientName={recipientName}
-            />
-          </div>
-        </PageWrapper>
-      );
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.full_name) {
+          setRecipientName(data.full_name);
+        } else {
+          setRecipientName(`User #${recipientId}`);
+        }
+      } catch {
+        setRecipientName(`User #${recipientId}`);
+      }
     };
 
-    export default ChatPage;
+    loadRecipient();
+  }, [API_URL, recipientId]);
+
+  return (
+    <PageWrapper>
+      <div className="container mx-auto max-w-2xl py-8">
+        <div className="sticky top-0 z-40 -mx-4 px-4 py-4 bg-background/80 backdrop-blur-sm border-b border-border mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <UserDashboardButton />
+          </div>
+        </div>
+        <ChatInterface recipientId={recipientId} recipientName={recipientName} />
+      </div>
+    </PageWrapper>
+  );
+};
+
+export default ChatPage;

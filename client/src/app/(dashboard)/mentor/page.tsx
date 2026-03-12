@@ -8,26 +8,71 @@ import PageWrapper from '@/components/PageWrapper';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MessageCircle, Users, TrendingUp, User, LogOut, Star, Clock, DollarSign, BookOpen, MoreHorizontal, Bell, Settings, BarChart3, Video, Mail, MessageSquare, Plus } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from "@/context/AuthContext";
+import TranslateButton from "@/components/TranslateButton";
+import { useI18n } from "@/context/I18nContext";
+import { useRouter } from 'next/navigation';
 
 const MentorDashboard: React.FC = () => {
   const [sessions, setSessions] = useState([]); // To hold the sessions
+  const [isResponding, setIsResponding] = useState<number | null>(null);
+  const [respondErrorBySessionId, setRespondErrorBySessionId] = useState<Record<number, string>>({});
 
-  
-    useEffect(() => {
-      const fetchSessions = async () => {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sessions/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setSessions(data);
-        }
-      };
-      fetchSessions();
-    }, []);
+  const router = useRouter();
   const { logout } = useAuth();
+  const { t } = useI18n();
+
+  useEffect(() => {
+    const fetchSessions = async () => {
+      const token = localStorage.getItem('auth_token');
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${API_URL}/api/sessions/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data);
+      }
+    };
+    fetchSessions();
+  }, []);
+
+  const respondToSession = async (sessionId: number, status: 'accepted' | 'rejected') => {
+    const token = localStorage.getItem('auth_token');
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    setIsResponding(sessionId);
+    setRespondErrorBySessionId((prev) => {
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId}/respond`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Failed to update session');
+      }
+
+      setSessions((prev: any) => prev.map((s: any) => (s.id === sessionId ? data : s)));
+    } catch (err) {
+      setRespondErrorBySessionId((prev) => ({
+        ...prev,
+        [sessionId]: err instanceof Error ? err.message : 'Failed to update session',
+      }));
+    } finally {
+      setIsResponding(null);
+    }
+  };
+
   // Mock data for mentees and activity
   const recentMentees = [
     {
@@ -94,17 +139,22 @@ const MentorDashboard: React.FC = () => {
   return (
     <PageWrapper>
       {/* Header */}
-      <header className="border-b border-border/30 bg-gradient-to-r from-background/95 via-background/98 to-background/95 backdrop-blur-md sticky top-0 z-50 shadow-sm" role="banner">
+      <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50" role="banner">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Logo size="sm" />
             <div className="h-6 w-px bg-border/50"></div>
-            <Badge variant="secondary" className="bg-gradient-to-r from-primary/10 to-accent/10 text-primary border border-primary/20 px-3 py-1" aria-label="User role">
+            <Badge variant="secondary" className="text-primary" aria-label="User role">
               ✨ Mentor
             </Badge>
           </div>
           
           <nav className="flex items-center gap-3" role="navigation" aria-label="User navigation">
+            <TranslateButton
+              variant="ghost"
+              size="sm"
+              className="rounded-xl bg-muted/30 hover:bg-muted/50 text-foreground border border-border/50 px-4 py-2"
+            />
             <button 
               className="relative p-2.5 rounded-xl bg-muted/50 hover:bg-muted transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 group"
               aria-label="Notifications"
@@ -126,7 +176,7 @@ const MentorDashboard: React.FC = () => {
               className="bg-muted/30 hover:bg-muted/50 text-foreground border border-border/50 px-4 py-2 rounded-xl transition-all duration-200"
             >
               <User className="h-4 w-4 mr-2" />
-              Profile
+              {t("nav.profile")}
             </GradientButton>
             <GradientButton 
               onClick={logout}
@@ -136,7 +186,7 @@ const MentorDashboard: React.FC = () => {
               className="border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 px-4 py-2 rounded-xl transition-all duration-200"
             >
               <LogOut className="h-4 w-4 mr-2" />
-              Logout
+              {t("nav.logout")}
             </GradientButton>
           </nav>
         </div>
@@ -145,7 +195,7 @@ const MentorDashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8" role="main">
         {/* Welcome Section */}
         <motion.section
-          className="text-center py-12 px-8 rounded-2xl bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 border border-primary/10 mx-auto max-w-4xl"
+          className="text-center py-10 px-6 rounded-xl border bg-card mx-auto max-w-4xl"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
@@ -176,9 +226,8 @@ const MentorDashboard: React.FC = () => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4, delay: 0.1 * index }}
             >
-              <Card className="relative group overflow-hidden border-0 bg-gradient-to-br from-background to-muted/30 shadow-lg hover:shadow-xl transition-all duration-300 focus-within:ring-2 focus-within:ring-primary/50 focus-within:ring-offset-2">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <CardContent className="relative p-6">
+              <Card className="border shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{stat.title}</p>
@@ -186,7 +235,7 @@ const MentorDashboard: React.FC = () => {
                         {stat.value}
                       </p>
                     </div>
-                    <div className={`p-4 rounded-2xl bg-gradient-to-br from-background/50 to-muted/50 border border-border/30`} aria-hidden="true">
+                    <div className="p-3 rounded-xl bg-muted border" aria-hidden="true">
                       <stat.icon className={`h-7 w-7 ${stat.color}`} />
                     </div>
                   </div>
@@ -208,7 +257,7 @@ const MentorDashboard: React.FC = () => {
           
           <GradientButton 
             variant="primary" 
-            className="h-20 flex-col gap-2 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 text-white hover:text-white border-0 bg-gradient-to-br from-primary to-primary/80"
+            className="h-20 flex-col gap-2 rounded-xl shadow-sm hover:shadow-md transition-shadow"
             aria-label="Open schedule management"
           >
             <Calendar className="h-6 w-6 text-white drop-shadow-sm" aria-hidden="true" />
@@ -217,7 +266,7 @@ const MentorDashboard: React.FC = () => {
           
           <GradientButton 
             variant="accent" 
-            className="h-20 flex-col gap-2 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 text-white hover:text-white border-0 bg-gradient-to-br from-accent to-accent/80 hover:from-accent/90 hover:to-accent/90"
+            className="h-20 flex-col gap-2 rounded-xl shadow-sm hover:shadow-md transition-shadow"
             aria-label="Open messages"
           >
             <MessageCircle className="h-6 w-6 text-white drop-shadow-sm" aria-hidden="true" />
@@ -226,7 +275,7 @@ const MentorDashboard: React.FC = () => {
           
           <GradientButton 
             variant="outline" 
-            className="h-20 flex-col gap-2 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 border-2 border-primary/30 text-primary hover:bg-primary hover:text-white hover:border-primary bg-gradient-to-br from-primary/5 to-primary/10"
+            className="h-20 flex-col gap-2 rounded-xl shadow-sm hover:shadow-md transition-shadow"
             aria-label="View my mentees"
           >
             <Users className="h-6 w-6" aria-hidden="true" />
@@ -235,7 +284,7 @@ const MentorDashboard: React.FC = () => {
           
           <GradientButton 
             variant="ghost" 
-            className="h-20 flex-col gap-2 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 bg-gradient-to-br from-muted/50 to-muted/30 text-foreground hover:bg-muted hover:text-foreground border border-border/50"
+            className="h-20 flex-col gap-2 rounded-xl shadow-sm hover:shadow-md transition-shadow"
             aria-label="View analytics"
           >
             <TrendingUp className="h-6 w-6 text-foreground" aria-hidden="true" />
@@ -253,10 +302,10 @@ const MentorDashboard: React.FC = () => {
               transition={{ duration: 0.6, delay: 0.3 }}
               aria-labelledby="recent-mentees-heading"
             >
-              <Card className="border-0 bg-gradient-to-br from-background to-muted/20 shadow-xl rounded-2xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-primary/10 via-accent/5 to-primary/10 border-b border-border/30 pb-6">
+              <Card className="border shadow-sm rounded-xl overflow-hidden">
+                <CardHeader className="border-b">
                   <CardTitle className="flex items-center gap-3 text-xl" id="recent-mentees-heading">
-                    <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+                    <div className="p-2 rounded-xl bg-muted border">
                       <Users className="h-5 w-5 text-primary" aria-hidden="true" />
                     </div>
                     Recent Mentees
@@ -269,7 +318,7 @@ const MentorDashboard: React.FC = () => {
                   {recentMentees.map((mentee, index) => (
                     <motion.article
                       key={mentee.id}
-                      className="group flex items-center gap-4 p-5 rounded-2xl border border-border/30 bg-gradient-to-r from-background to-muted/30 hover:from-primary/5 hover:to-accent/5 hover:shadow-lg transition-all duration-300 cursor-pointer focus-within:ring-2 focus-within:ring-primary/50 focus-within:ring-offset-2"
+                      className="group flex items-center gap-4 p-5 rounded-xl border bg-card hover:shadow-md transition-shadow duration-200 cursor-pointer focus-within:ring-2 focus-within:ring-primary/50 focus-within:ring-offset-2"
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.4, delay: 0.1 * index }}
@@ -284,7 +333,7 @@ const MentorDashboard: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="text-4xl bg-gradient-to-br from-primary/10 to-accent/10 p-3 rounded-2xl border border-primary/20" aria-hidden="true">
+                      <div className="text-4xl bg-muted p-3 rounded-xl border" aria-hidden="true">
                         {mentee.avatar}
                       </div>
                       <div className="flex-1 space-y-3">
@@ -329,10 +378,10 @@ const MentorDashboard: React.FC = () => {
               transition={{ duration: 0.6, delay: 0.4 }}
               aria-labelledby="recent-activity-heading"
             >
-              <Card className="border-0 bg-gradient-to-br from-background to-muted/20 shadow-xl rounded-2xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-accent/10 via-primary/5 to-accent/10 border-b border-border/30 pb-6">
+              <Card className="border shadow-sm rounded-xl overflow-hidden">
+                <CardHeader className="border-b">
                   <CardTitle className="flex items-center gap-3 text-xl" id="recent-activity-heading">
-                    <div className="p-2 rounded-xl bg-accent/10 border border-accent/20">
+                    <div className="p-2 rounded-xl bg-muted border">
                       <TrendingUp className="h-5 w-5 text-accent" aria-hidden="true" />
                     </div>
                     Recent Activity
@@ -346,13 +395,13 @@ const MentorDashboard: React.FC = () => {
                     {recentActivity.map((activity, index) => (
                       <motion.div
                         key={index}
-                        className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-background to-muted/30 hover:from-accent/5 hover:to-primary/5 transition-all duration-300 border border-border/30"
+                        className="flex items-center gap-4 p-4 rounded-xl bg-card hover:bg-muted/30 transition-colors duration-200 border"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.4, delay: 0.1 * index }}
                         role="listitem"
                       >
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center border border-primary/20" aria-hidden="true">
+                        <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center border" aria-hidden="true">
                           {activity.type === 'session' && <BookOpen className="h-5 w-5 text-primary" />}
                           {activity.type === 'request' && <Users className="h-5 w-5 text-accent" />}
                           {activity.type === 'payment' && <DollarSign className="h-5 w-5 text-green-500" />}
@@ -381,27 +430,105 @@ const MentorDashboard: React.FC = () => {
               transition={{ duration: 0.6, delay: 0.5 }}
               aria-labelledby="upcoming-sessions-heading"
             >
-              <Card className="border-0 bg-gradient-to-br from-background to-muted/20 shadow-xl rounded-2xl overflow-hidden">
-                 {sessions.length > 0 ? (
-          sessions.map((session: any, index: number) => (
-            <motion.div key={index} /* ... (rest of the code is the same) ... */ >
-              <h4 className="font-medium text-sm">{`Session with Mentor ID: ${session.mentor_id}`}</h4>
-              <p className="text-xs text-muted-foreground">
-                Status: {session.status}
-              </p>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-xs text-primary">
-                  {new Date(session.scheduled_time).toLocaleDateString()}
-                </span>
-                <span className="text-xs font-medium">
-                  {new Date(session.scheduled_time).toLocaleTimeString()}
-                </span>
-              </div>
-            </motion.div>
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground">No upcoming sessions.</p>
-        )}
+              <Card className="border shadow-sm rounded-xl overflow-hidden">
+                <CardHeader className="border-b">
+                  <CardTitle className="flex items-center gap-3" id="upcoming-sessions-heading">
+                    <div className="p-2 rounded-xl bg-muted border">
+                      <Calendar className="h-4 w-4 text-primary" aria-hidden="true" />
+                    </div>
+                    Upcoming Sessions
+                  </CardTitle>
+                  <CardDescription>
+                    Review requests and manage your schedule
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {sessions.length > 0 ? (
+                    <div className="space-y-4">
+                      {sessions.map((session: any, index: number) => (
+                        <motion.div
+                          key={session.id ?? index}
+                          className="p-4 rounded-2xl bg-gradient-to-r from-background to-muted/30 border border-border/30 cursor-pointer"
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.35, delay: 0.05 * index }}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            if (session?.id != null) {
+                              router.push(`/mentor/sessions/${session.id}`);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if ((e.key === 'Enter' || e.key === ' ') && session?.id != null) {
+                              e.preventDefault();
+                              router.push(`/mentor/sessions/${session.id}`);
+                            }
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h4 className="font-semibold text-sm text-foreground">
+                                {`Session request (#${session.id})`}
+                              </h4>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Status: <span className="font-medium">{session.status}</span>
+                              </p>
+                            </div>
+                            <Badge variant="secondary" className="shrink-0">
+                              {new Date(session.scheduled_time).toLocaleDateString()}
+                            </Badge>
+                          </div>
+
+                          <div className="flex justify-between items-center mt-3">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(session.scheduled_time).toLocaleTimeString()}
+                            </span>
+                            {String(session.status ?? '').toLowerCase() === 'pending' && (
+                              <div className="flex flex-col items-end gap-2">
+                                <div className="flex flex-wrap gap-2 justify-end">
+                                  <GradientButton
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      respondToSession(session.id, 'accepted');
+                                    }}
+                                    disabled={isResponding === session.id}
+                                    className="px-3 py-2 rounded-xl min-w-[88px]"
+                                  >
+                                    Accept
+                                  </GradientButton>
+                                  <GradientButton
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      respondToSession(session.id, 'rejected');
+                                    }}
+                                    disabled={isResponding === session.id}
+                                    className="px-3 py-2 rounded-xl min-w-[88px]"
+                                  >
+                                    Reject
+                                  </GradientButton>
+                                </div>
+                                {respondErrorBySessionId[session.id] && (
+                                  <p className="text-xs text-red-600 max-w-[220px] text-right">
+                                    {respondErrorBySessionId[session.id]}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground text-center py-8 rounded-xl bg-muted/20 border">
+                      No upcoming sessions.
+                    </div>
+                  )}
+                </CardContent>
               </Card>
             </motion.section>
 
@@ -412,10 +539,10 @@ const MentorDashboard: React.FC = () => {
               transition={{ duration: 0.6, delay: 0.6 }}
               aria-labelledby="performance-heading"
             >
-              <Card className="border-0 bg-gradient-to-br from-background to-muted/20 shadow-xl rounded-2xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-accent/10 via-primary/5 to-accent/10 border-b border-border/30 pb-6">
+              <Card className="border shadow-sm rounded-xl overflow-hidden">
+                <CardHeader className="border-b">
                   <CardTitle className="flex items-center gap-3" id="performance-heading">
-                    <div className="p-2 rounded-xl bg-accent/10 border border-accent/20">
+                    <div className="p-2 rounded-xl bg-muted border">
                       <TrendingUp className="h-4 w-4 text-accent" aria-hidden="true" />
                     </div>
                     This Month's Performance
@@ -423,7 +550,7 @@ const MentorDashboard: React.FC = () => {
                 </CardHeader>
                 <CardContent className="space-y-6 p-6">
                   <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-gradient-to-r from-background to-muted/30 border border-border/30">
+                    <div className="p-4 rounded-xl bg-card border">
                       <div className="flex justify-between items-center mb-3">
                         <span className="text-sm font-medium text-foreground">Sessions Goal</span>
                         <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-1 rounded-lg">18/20</span>
@@ -433,7 +560,7 @@ const MentorDashboard: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="p-4 rounded-2xl bg-gradient-to-r from-background to-muted/30 border border-border/30">
+                    <div className="p-4 rounded-xl bg-card border">
                       <div className="flex justify-between items-center mb-3">
                         <span className="text-sm font-medium text-foreground">Satisfaction Rate</span>
                         <span className="text-sm font-bold text-accent bg-accent/10 px-2 py-1 rounded-lg">96%</span>

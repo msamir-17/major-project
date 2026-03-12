@@ -7,14 +7,16 @@ import { useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
 import { GradientButton } from "@/components/ui/gradient-button";
 import PageWrapper from "@/components/PageWrapper";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Briefcase, GraduationCap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
 
 interface LoginData {
   email: string;
   password: string;
+  role: "learner" | "mentor";
 }
 
 const Login: React.FC = () => {
@@ -22,11 +24,13 @@ const Login: React.FC = () => {
   const [formData, setFormData] = useState<LoginData>({
     email: "",
     password: "",
+    role: "learner",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const router = useRouter();
+  const { login } = useAuth();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -55,32 +59,24 @@ const Login: React.FC = () => {
     setErrors({});
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/users/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-          }),
-        },
-      );
+      await login({
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+      });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErrors({ general: data.detail || "Login failed" });
+      if (formData.role === "mentor") {
+        router.push("/mentor");
       } else {
-        localStorage.setItem("auth_token", data.access_token);
-        if (data.user.is_mentor) {
-          router.push("/mentor");
-        } else {
-          router.push("/user");
-        }
+        router.push("/user");
       }
     } catch (error) {
-      setErrors({ general: "Something went wrong. Please try again." });
+      setErrors({
+        general:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong. Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -127,6 +123,51 @@ const Login: React.FC = () => {
                   {errors.general}
                 </div>
               )}
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Sign in as</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, role: "learner" }))}
+                    className={`text-left w-full rounded-xl border p-4 transition-all ${
+                      formData.role === "learner"
+                        ? "border-primary ring-2 ring-primary/20 bg-primary/5"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center">
+                        <GraduationCap className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Learner</p>
+                        <p className="text-xs text-muted-foreground">I want to learn and book sessions</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, role: "mentor" }))}
+                    className={`text-left w-full rounded-xl border p-4 transition-all ${
+                      formData.role === "mentor"
+                        ? "border-primary ring-2 ring-primary/20 bg-primary/5"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center">
+                        <Briefcase className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Mentor</p>
+                        <p className="text-xs text-muted-foreground">I want to guide learners and host sessions</p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
 
               <label className="block text-sm font-medium mb-1" htmlFor="email">
                 Email Address

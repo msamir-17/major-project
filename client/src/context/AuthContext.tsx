@@ -38,7 +38,7 @@ type AuthAction =
 const initialState: AuthState = {
   user: null,
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: true,
   error: null,
 };
 
@@ -109,6 +109,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const checkAuthStatus = async () => {
       const token = localStorage.getItem("auth_token");
       if (token) {
+        dispatch({ type: "AUTH_START" });
         try {
           const response = await fetch(`${API_URL}/api/users/me`, {
             headers: {
@@ -127,6 +128,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           localStorage.removeItem("auth_token");
           dispatch({ type: "AUTH_LOGOUT" });
         }
+      } else {
+        dispatch({ type: "AUTH_LOGOUT" });
       }
     };
 

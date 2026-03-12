@@ -46,7 +46,8 @@ const SessionBooking: React.FC<SessionBookingProps> = ({
     const token = localStorage.getItem("auth_token");
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sessions/book`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const response = await fetch(`${API_URL}/api/sessions/book`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58,8 +59,10 @@ const SessionBooking: React.FC<SessionBookingProps> = ({
         }),
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        throw new Error("Booking failed");
+        throw new Error(data?.detail || "Booking failed");
       }
 
       setBookingStatus("success");

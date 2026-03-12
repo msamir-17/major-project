@@ -26,6 +26,8 @@ interface MentorRecommendation {
   mentor_hourly_rate?: number;
   mentor_availability?: string;
   mentor_company?: string;
+  mentor_bio?: string;
+  mentor_id?: number;
 
   mentor_linkedin_url?: string;
   recommendation_score: {
@@ -58,6 +60,26 @@ export const useMentorRecommendations = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+
+  const getApiErrorMessage = (data: any, fallback: string) => {
+    const detail = data?.detail;
+    if (typeof detail === "string" && detail.trim().length > 0) return detail;
+    if (Array.isArray(detail)) {
+      const msg = detail
+        .map((d) => (typeof d === "string" ? d : d?.msg || JSON.stringify(d)))
+        .filter(Boolean)
+        .join(", ");
+      if (msg.trim().length > 0) return msg;
+    }
+    if (detail != null) {
+      try {
+        return JSON.stringify(detail);
+      } catch {
+        return fallback;
+      }
+    }
+    return fallback;
+  };
 
   const fetchRecommendations = useCallback(
     async (limit: number = 10, filters?: RecommendationFilters) => {
@@ -107,9 +129,15 @@ export const useMentorRecommendations = () => {
         });
 
         if (!response.ok) {
-          throw new Error(
-            `Failed to fetch recommendations: ${response.statusText}`,
-          );
+          let body: any = null;
+          try {
+            body = await response.json();
+          } catch {
+            body = null;
+          }
+
+          const fallback = `Failed to fetch recommendations (${response.status})${response.statusText ? `: ${response.statusText}` : ""}`;
+          throw new Error(getApiErrorMessage(body, fallback));
         }
 
         const data = await response.json();

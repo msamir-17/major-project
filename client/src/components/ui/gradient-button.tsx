@@ -8,8 +8,8 @@ const gradientButtonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "gradient-primary text-primary-foreground shadow-medium hover:shadow-strong",
-        hero: "gradient-hero text-primary-foreground shadow-medium hover:shadow-strong",
+        primary: "bg-primary hover:bg-primary/90 gradient-primary text-primary-foreground shadow-medium hover:shadow-strong",
+        hero: "bg-primary hover:bg-primary/90 gradient-hero text-primary-foreground shadow-medium hover:shadow-strong",
         outline: "border-2 border-primary bg-transparent text-primary hover:gradient-primary hover:text-primary-foreground",
         ghost: "text-primary hover:bg-primary/10 hover:text-primary",
         accent: "bg-accent text-accent-foreground shadow-soft hover:bg-accent-soft hover:shadow-medium"

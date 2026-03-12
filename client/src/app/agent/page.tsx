@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Send, Bot, User, Heart, AlertCircle, Phone, Mic, MicOff, Volume2, VolumeX, Loader2, MapPin } from "lucide-react"
+import UserDashboardButton from "@/components/UserDashboardButton"
 
 interface Message {
   id: string
@@ -26,6 +27,12 @@ export default function ChatPage() {
       sender: "ai",
       timestamp: new Date(),
     },
+    {
+      id: "2",
+      content: "Tip: Click Connect to start a session. Voice mode only starts when you click Start Voice.",
+      sender: "ai",
+      timestamp: new Date(),
+    },
   ])
   const [inputValue, setInputValue] = useState("")
   const [isConnected, setIsConnected] = useState(false)
@@ -38,15 +45,23 @@ export default function ChatPage() {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
   const currentMessageIdRef = useRef<string | null>(null)
+  const serverDisabledRef = useRef(false)
+  const connectStartedAtRef = useRef<number | null>(null)
+  const lastMessageAtRef = useRef<number | null>(null)
+  const ignoreNextErrorRef = useRef(false)
+  const lastConnectionLostToastAtRef = useRef<number | null>(null)
   
   // Audio streaming refs - exactly like Google ADK
   const audioPlayerNodeRef = useRef<AudioWorkletNode | null>(null)
   const audioPlayerContextRef = useRef<AudioContext | null>(null)
+  const audioPlayerGainRef = useRef<GainNode | null>(null)
   const audioRecorderNodeRef = useRef<AudioWorkletNode | null>(null)
   const audioRecorderContextRef = useRef<AudioContext | null>(null)
   const micStreamRef = useRef<MediaStream | null>(null)
   const audioBufferRef = useRef<Uint8Array[]>([])
-  const bufferTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const bufferTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
 
   // Utility functions - exactly from Google ADK
   const base64ToArray = (base64: string): ArrayBuffer => {
@@ -82,7 +97,17 @@ export default function ChatPage() {
     const audioContext = new AudioContext({ sampleRate: 24000 })
     await audioContext.audioWorklet.addModule("/pcm-player-processor.js")
     const audioPlayerNode = new AudioWorkletNode(audioContext, "pcm-player-processor")
-    audioPlayerNode.connect(audioContext.destination)
+
+    const gainNode = audioContext.createGain()
+    gainNode.gain.value = 1
+    audioPlayerNode.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+
+    audioPlayerGainRef.current = gainNode
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume()
+    }
     return [audioPlayerNode, audioContext]
   }
 
@@ -108,6 +133,10 @@ export default function ChatPage() {
     audioRecorderNode.port.onmessage = (event) => {
       const pcmData = convertFloat32ToPCM(event.data)
       audioRecorderHandler(pcmData)
+    }
+
+    if (audioRecorderContext.state === "suspended") {
+      await audioRecorderContext.resume()
     }
 
     return [audioRecorderNode, audioRecorderContext, micStream]
@@ -147,7 +176,7 @@ export default function ChatPage() {
 
     if (isConnected && combinedBuffer.byteLength > 0) {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/send/${userId}`, {
+        const response = await fetch(`${API_URL}/send/${userId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -281,8 +310,6 @@ export default function ChatPage() {
 
   // Initial connection on mount
   useEffect(() => {
-    connectToServer(false)
-    
     // Cleanup on unmount
     return () => {
       if (eventSourceRef.current) {
@@ -307,6 +334,10 @@ export default function ChatPage() {
   const connectToServer = async (audioMode = false) => {
     try {
       console.log(`Connecting to server in ${audioMode ? 'audio' : 'text'} mode...`)
+
+      connectStartedAtRef.current = Date.now()
+      lastMessageAtRef.current = null
+      ignoreNextErrorRef.current = false
       
       // Close existing connection
       if (eventSourceRef.current) {
@@ -315,22 +346,23 @@ export default function ChatPage() {
 
       // Check server health first
       try {
-        const healthResponse = await fetch('http://127.0.0.1:8000/health')
+        const healthResponse = await fetch(`${API_URL}/health`)
         if (!healthResponse.ok) {
           throw new Error('Server not available')
         }
       } catch (error) {
-        throw new Error('Server not reachable. Make sure your Python server is running on http://127.0.0.1:8000')
+        throw new Error(`Server not reachable. Make sure your Python server is running on ${API_URL}`)
       }
 
       // Create EventSource connection - exactly like Google ADK
-      const sse_url = `http://127.0.0.1:8000/events/${userId}?is_audio=${audioMode}`
+      const sse_url = `${API_URL}/events/${userId}?is_audio=${audioMode}`
       console.log("Connecting to:", sse_url)
       const eventSource = new EventSource(sse_url)
       eventSourceRef.current = eventSource
 
       eventSource.onopen = () => {
         setIsConnected(true)
+        serverDisabledRef.current = false
         console.log("Connected to SkillBridge AI")
         
         if (!audioMode) {
@@ -348,14 +380,7 @@ export default function ChatPage() {
         try {
           const data = JSON.parse(event.data)
           console.log("Received data:", data)
-          
-          // Handle turn completion
-          if (data.turn_complete === true) {
-            setIsTyping(false)
-            currentMessageIdRef.current = null
-            console.log("Turn completed")
-            return
-          }
+          lastMessageAtRef.current = Date.now()
 
           // Handle interruption
           if (data.interrupted === true) {
@@ -370,12 +395,24 @@ export default function ChatPage() {
           // Handle audio response
           if (data.mime_type === "audio/pcm" && data.data && audioPlayerNodeRef.current && !isMuted) {
             console.log("Received audio data:", data.data.length, "characters")
+            if (audioPlayerContextRef.current?.state === "suspended") {
+              audioPlayerContextRef.current.resume().catch(() => {})
+            }
             const audioBuffer = base64ToArray(data.data)
             audioPlayerNodeRef.current.port.postMessage(audioBuffer)
           }
 
           // Handle text response
           if (data.mime_type === "text/plain" && data.data) {
+            if (
+              typeof data.data === "string" &&
+              (data.data.includes("Google ADK features are not available") ||
+                data.data.includes("ADK runner not available") ||
+                data.data.includes("Failed to start agent session"))
+            ) {
+              serverDisabledRef.current = true
+            }
+
             setIsTyping(true)
             
             if (currentMessageIdRef.current === null) {
@@ -397,6 +434,18 @@ export default function ChatPage() {
               )
             }
           }
+
+          // Handle turn completion (after processing any data in this event)
+          if (data.turn_complete === true) {
+            setIsTyping(false)
+            currentMessageIdRef.current = null
+            console.log("Turn completed")
+
+            if (typeof data?.data === "string" && data.data.trim().startsWith("❌")) {
+              ignoreNextErrorRef.current = true
+            }
+            return
+          }
         } catch (error) {
           console.error('Error parsing message:', error)
         }
@@ -405,6 +454,40 @@ export default function ChatPage() {
       eventSource.onerror = (error) => {
         console.error("EventSource error:", error)
         setIsConnected(false)
+
+        if (serverDisabledRef.current) {
+          return
+        }
+
+        if (ignoreNextErrorRef.current) {
+          ignoreNextErrorRef.current = false
+          return
+        }
+
+        const now = Date.now()
+        const connectStartedAt = connectStartedAtRef.current
+        const sinceConnectMs = connectStartedAt ? now - connectStartedAt : null
+
+        if (sinceConnectMs !== null && sinceConnectMs < 2000 && !lastMessageAtRef.current) {
+          const lastToastAt = lastConnectionLostToastAtRef.current
+          if (!lastToastAt || now - lastToastAt > 5000) {
+            lastConnectionLostToastAtRef.current = now
+            const errorMessage: Message = {
+              id: Date.now().toString(),
+              content: "❌ Agent connection closed immediately by server. Check backend console logs for the real error (ADK runner/session startup).",
+              sender: "ai",
+              timestamp: new Date(),
+            }
+            setMessages(prev => [...prev, errorMessage])
+          }
+          return
+        }
+
+        const lastToastAt = lastConnectionLostToastAtRef.current
+        if (lastToastAt && now - lastToastAt < 5000) {
+          return
+        }
+        lastConnectionLostToastAtRef.current = now
         
         const errorMessage: Message = {
           id: Date.now().toString(),
@@ -466,7 +549,7 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMessage])
 
     try {
-      const send_url = `http://127.0.0.1:8000/send/${userId}`
+      const send_url = `${API_URL}/send/${userId}`
       const response = await fetch(send_url, {
         method: 'POST',
         headers: {
@@ -479,7 +562,16 @@ export default function ChatPage() {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const data = await response.json().catch(() => null)
+        const raw = data?.error || data?.detail || `HTTP error! status: ${response.status}`
+        const msg = String(raw)
+        const friendly =
+          msg.toLowerCase().includes("quota") || msg.includes("RESOURCE_EXHAUSTED")
+            ? "❌ Gemini quota/limit exceeded. Please switch to a new Gemini API key and restart the backend."
+            : msg.toLowerCase().includes("permission") || msg.includes("PERMISSION_DENIED") || msg.toLowerCase().includes("api key")
+              ? "❌ Gemini API key invalid or missing permissions. Please update GEMINI_API_KEY and restart the backend."
+              : msg
+        throw new Error(friendly)
       }
 
       setInputValue("")
@@ -489,7 +581,7 @@ export default function ChatPage() {
       console.error('Error sending message:', error)
       const errorMessage: Message = {
         id: Date.now().toString(),
-        content: "❌ Failed to send message. Please try again.",
+        content: typeof error === "object" && error !== null && "message" in error ? String((error as any).message) : "❌ Failed to send message. Please try again.",
         sender: "ai",
         timestamp: new Date(),
       }
@@ -498,17 +590,14 @@ export default function ChatPage() {
   }
 
   const toggleMute = () => {
-    if (audioPlayerNodeRef.current && audioPlayerContextRef.current) {
-      if (isMuted) {
-        audioPlayerNodeRef.current.connect(audioPlayerContextRef.current.destination)
-      } else {
-        audioPlayerNodeRef.current.disconnect()
-      }
-      setIsMuted(!isMuted)
+    if (audioPlayerGainRef.current) {
+      const nextMuted = !isMuted
+      audioPlayerGainRef.current.gain.value = nextMuted ? 0 : 1
+      setIsMuted(nextMuted)
       
       const muteMessage: Message = {
         id: Date.now().toString(),
-        content: `🔊 Audio ${isMuted ? 'unmuted' : 'muted'}`,
+        content: `🔊 Audio ${nextMuted ? 'muted' : 'unmuted'}`,
         sender: "ai",
         timestamp: new Date(),
       }
@@ -544,7 +633,7 @@ export default function ChatPage() {
         const long = position.coords.longitude
         
         try {
-          const response = await fetch(`http://127.0.0.1:8000/send/${userId}`, {
+          const response = await fetch(`${API_URL}/send/${userId}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -591,6 +680,12 @@ export default function ChatPage() {
     <>
       <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 bg-background/80 backdrop-blur-sm border-b border-border mb-6">
+            <div className="flex items-center justify-between gap-3">
+              <UserDashboardButton />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             {/* Chat Interface */}
             <div className="lg:col-span-3">

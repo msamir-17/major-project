@@ -8,6 +8,8 @@ import PageWrapper from "@/components/PageWrapper";
 import { ArrowRight, Star, Users, Award, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import TranslateButton from "@/components/TranslateButton";
+import { useI18n } from "@/context/I18nContext";
 
 const Landing: React.FC = () => {
   const features = [
@@ -36,6 +38,7 @@ const Landing: React.FC = () => {
     { value: "100+", label: "Skills Covered" },
   ];
   const router = useRouter();
+  const { t } = useI18n();
 
   return (
     <PageWrapper className="bg-gradient">
@@ -49,18 +52,19 @@ const Landing: React.FC = () => {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <Logo size="md" />
           <div className="flex gap-3">
+            <TranslateButton variant="ghost" size="sm" className="rounded-xl" />
             <Button
               variant="ghost"
               onClick={() => router.push("/login")}
               className="hidden sm:flex border border-transparent hover:border-primary text-black font-semibold px-5 py-2 rounded-lg transition-colors"
             >
-              Sign In
+              {t("auth.sign_in")}
             </Button>
             <Button
               onClick={() => router.push("/register")}
               className="border text-black font-semibold px-5 py-2 rounded-lg bg-gradient-to-r from-primary to-accent hover:from-accent hover:to-primary transition-colors shadow"
             >
-              Get Started
+              {t("auth.get_started")}
             </Button>
           </div>
         </div>

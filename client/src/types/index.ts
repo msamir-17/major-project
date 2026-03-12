@@ -3,6 +3,7 @@ export interface User {
   full_name: string;
   email: string;
   role: 'learner' | 'mentor' | 'admin';
+  is_mentor?: boolean;
   phone_number?: string;
   profile_picture_url?: string;
   bio?: string;
@@ -42,6 +43,7 @@ export interface MentorProfile {
 export interface LoginCredentials {
   email: string;
   password: string;
+  role: "mentor" | "learner";
 }
 
 
